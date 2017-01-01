@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <bits/stdc++.h>
 using namespace std;
+#define NDEBUG
 
 #define EXIT_FAIL_OP   1   // return code on wrong option
 #define EXIT_FAIL_IO   2   // return code on IO error
@@ -81,6 +82,11 @@ int main(int argc, char *argv[])
             perror(progname);
             exit(EXIT_FAIL_IO);
         }
+    } else {
+        if(freopen("/dev/stdout", "wb", stdout) == NULL) {
+            perror(progname);
+            exit(EXIT_FAIL_IO);
+        }
     }
 
     if(toDecompress)
@@ -102,7 +108,9 @@ void outputHelp()
 
 void countBytes(Size *cnt);
 void huffmanEncode(Size *cnt);
-void rleEncodeFile(Size *cnt);
+void huffmanDecode();
+void rleEncode(Size *cnt);
+void rleDecode();
 
 // count number of each byte's appearance
 // decide whether use Huffman or RLE
@@ -119,7 +127,7 @@ void compress()
     if(nm1 > 1)
         huffmanEncode(cnt);
     else if(nm1 == 1)
-        rleEncodeFile(cnt);
+        rleEncode(cnt);
     else if(nm1 == 0)
         return;
 }
@@ -131,9 +139,24 @@ struct Node {
     Node(Byte b, Node *l=NULL, Node *r=NULL): byte(b), left(l), right(r) {}
 };
 
-void rleDecodeFile();
-Node *readTree();
-void hufDecodeFile(Node *root, Size origSize);
+#ifndef NDEBUG
+void logPrintTree(Node *p)
+{
+    if(p == NULL) {
+        fprintf(stderr, "# ");
+        return;
+    }
+    fprintf(stderr, "%d ", p->byte);
+    logPrintTree(p->left);
+    logPrintTree(p->right);
+}
+
+void logPrintTable(string *table)
+{
+    for(int i = 0; i < 256; ++i)
+        fprintf(stderr, "%d: %s\n", i, table[i].c_str());
+}
+#endif // NDEBUG
 
 // read huffman tree from stdin, use the tree to decode rest bits, and output
 void decompress()
@@ -141,12 +164,9 @@ void decompress()
     int b = getchar();
 
     if(b == 'H') {
-        Size origSize;
-        fread(&origSize, sizeof(Size), 1, stdin);
-        Node *root = readTree();
-        hufDecodeFile(root, origSize);
+        huffmanDecode();
     } else if(b == 'R') {
-        rleDecodeFile();
+        rleDecode();
     } else if(b == EOF) {
         return;
     } else {
@@ -165,7 +185,7 @@ void countBytes(Size *cnt)
 }
 
 // encode bytes from stdin with RLE
-void rleEncodeFile(Size *cnt)
+void rleEncode(Size *cnt)
 {
     putchar('R');   // represent this is encoded with RLE
     for(int i = 0; i < 256; ++i) {
@@ -178,7 +198,7 @@ void rleEncodeFile(Size *cnt)
 }
 
 // use RLE to decode bytes from stdin
-void rleDecodeFile()
+void rleDecode()
 {
     Byte b;
     Size cnt = 0;
@@ -190,9 +210,11 @@ void rleDecodeFile()
 }
 
 Node *buildTree(Size *cnt);
-void writeTree(Node *root);
 void buildTable(Node *p, string *table, string cur);
+Node *readTree();
+void writeTree(Node *root);
 void hufEncodeFile(string *encodingTable);
+void hufDecodeFile(Node *root, Size origSize);
 
 // encode bytes from stdin with Huffman coding
 void huffmanEncode(Size *cnt)
@@ -206,6 +228,54 @@ void huffmanEncode(Size *cnt)
     writeTree(root);
     buildTable(root, encodingTable, "");
     hufEncodeFile(encodingTable);
+
+#ifndef NDEBUG
+    logPrintTree(root);
+    fputc('\n', stderr);
+    logPrintTable(encodingTable);
+#endif // NDEBUG
+}
+
+// decode with huffman tree read from stdin
+void huffmanDecode()
+{
+    Size origSize;
+    fread(&origSize, sizeof(Size), 1, stdin);
+    Node *root = readTree();
+#ifndef NDEBUG
+    logPrintTree(root);
+#endif // NDEBUG
+    hufDecodeFile(root, origSize);
+}
+
+// read a byte to buffer, return it bit by bit
+// return EOF when reach it
+int readBit()
+{
+    static int buf = 0;
+    static int bufp = 8;
+
+    if(bufp == 8) {
+        if((buf = getchar()) == EOF)
+            return buf;
+        bufp = 0;
+    }
+    return (buf >> (bufp++)) & 1;
+}
+
+// wirte preorder traversal sequence to stdout
+// every two bytes represents a Node
+void writeTree(Node *p)
+{
+    if(p == NULL) { // 0000 0001 0000 0000 represents NULL
+        putchar(0);
+        putchar(1);
+        return;
+    }
+    putchar(p->byte);
+    putchar(0);
+    writeTree(p->left);
+    writeTree(p->right);
 }
 
 // build a huffman tree, return root of the tree
@@ -225,21 +295,6 @@ Node *buildTree(Size *cnt)
         que.push(P(p1.first + p2.first, np));
     }
     return que.top().second;
-}
-
-// wirte preorder traversal sequence to stdout
-// every two bytes represents a Node
-void writeTree(Node *p)
-{
-    if(p == NULL) {
-        putchar(0);
-        putchar(0);
-        return;
-    }
-    putchar(p->byte);
-    putchar(0);
-    writeTree(p->left);
-    writeTree(p->right);
 }
 
 // build encoding table based on a huffman tree
@@ -282,9 +337,6 @@ void hufEncodeFile(string *encodingTable)
     writeBit(-1, true);
 }
 
-Node *readTree();
-int readBit();
-
 // use huffman tree to decode bytes from stdin
 void hufDecodeFile(Node *root, Size origSize)
 {
@@ -292,7 +344,6 @@ void hufDecodeFile(Node *root, Size origSize)
     Size cnt = 0;
     Node *p = root;
 
-    // this write few bits more, fix it
     while((b = readBit()) != EOF) {
         p = (b == 0) ? p->left : p->right;
         if(p->left == NULL && p->right == NULL) {
@@ -308,25 +359,10 @@ Node *readTree()
 {
     Byte lowbit = getchar();
     Byte hghbit = getchar();
-    if(lowbit == 0 && hghbit == 0)
+    if(lowbit == 0 && hghbit == 1)
         return NULL;
     Node *p = new Node(lowbit);
     p->left = readTree();
     p->right = readTree();
     return p;
-}
-
-// read a byte to buffer, return it bit by bit
-// return EOF when reach it
-int readBit()
-{
-    static int buf = 0;
-    static int bufp = 8;
-
-    if(bufp == 8) {
-        if((buf = getchar()) == EOF)
-            return buf;
-        bufp = 0;
-    }
-    return (buf >> (bufp++)) & 1;
 }
