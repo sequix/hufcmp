@@ -12,11 +12,11 @@ using namespace std;
 #define EXIT_FAIL_IO   2   // return code on IO error
 #define EXIT_FAIL_FE   3   // return code on illegal file
 
-typedef unsigned char Byte;
-typedef unsigned char Bit;
-typedef unsigned int Size;
+typedef uint8_t  Byte;
+typedef uint8_t  Bit;
+typedef uint32_t Size;
 
-const Size MAX_SIZE = UINT_MAX;
+const Size MAX_SIZE = (1LL << 32) - 1;
 
 char *progname = NULL;
 Size inputFileSize = 0;
@@ -118,8 +118,10 @@ void compress()
     // only when there are more than 1 kind byte, can we use huffman
     if(nm1 > 1)
         huffmanEncode(cnt);
-    else
+    else if(nm1 == 1)
         rleEncodeFile(cnt);
+    else if(nm1 == 0)
+        return;
 }
 
 // huffman tree node
@@ -136,20 +138,19 @@ void hufDecodeFile(Node *root, Size origSize);
 // read huffman tree from stdin, use the tree to decode rest bits, and output
 void decompress()
 {
-    Byte b = getchar();
+    int b = getchar();
 
     if(b == 'H') {
         Size origSize;
-        if(fread(&origSize, sizeof(Size), 1, stdin) != 1) {
-            perror(progname);
-            exit(EXIT_FAIL_IO);
-        }
+        fread(&origSize, sizeof(Size), 1, stdin);
         Node *root = readTree();
         hufDecodeFile(root, origSize);
     } else if(b == 'R') {
         rleDecodeFile();
+    } else if(b == EOF) {
+        return;
     } else {
-        fprintf(stderr, "%s: invalid file\n", progname);
+        fprintf(stderr, "%s: invalid file type\n", progname);
         exit(EXIT_FAIL_FE);
     }
 }
@@ -182,10 +183,7 @@ void rleDecodeFile()
     Byte b;
     Size cnt = 0;
 
-    if(fread(&cnt, sizeof(Size), 1, stdin) != 1) {
-        perror(progname);
-        exit(EXIT_FAIL_IO);
-    }
+    fread(&cnt, sizeof(Size), 1, stdin);
     b = getchar();
     for(Size i = 0; i < cnt; ++i)
         putchar(b);
