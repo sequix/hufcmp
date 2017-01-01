@@ -1,6 +1,6 @@
 /*
  * Author: sequix
- * Date: 2016/12/31
+ * Date: 2017/01/01
  * Filename: main.cpp
  * Descruption: Use huffman tree to compress/decompress a file.
  */
@@ -292,7 +292,6 @@ void hufDecodeFile(Node *root, Size origSize)
     Size cnt = 0;
     Node *p = root;
 
-    // this write few bits more, fix it
     while((b = readBit()) != EOF) {
         p = (b == 0) ? p->left : p->right;
         if(p->left == NULL && p->right == NULL) {
