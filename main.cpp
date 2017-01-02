@@ -1,6 +1,6 @@
 /*
  * Author: sequix
- * Date: 2017/01/01
+ * Date: 2017/01/02
  * Filename: main.cpp
  * Descruption: Use huffman tree to compress/decompress a file.
  */
@@ -291,7 +291,7 @@ Node *buildTree(Size *cnt)
     while(que.size() > 1) {
         P p1 = que.top(); que.pop();
         P p2 = que.top(); que.pop();
-        Node *np = new Node(-1, p1.second, p2.second);
+        Node *np = new Node(0, p1.second, p2.second);
         que.push(P(p1.first + p2.first, np));
     }
     return que.top().second;
@@ -359,8 +359,7 @@ Node *readTree()
 {
     Byte lowbit = getchar();
     Byte hghbit = getchar();
-    if(lowbit == 0 && hghbit == 1)
-        return NULL;
+    if(hghbit == 1) return NULL;
     Node *p = new Node(lowbit);
     p->left = readTree();
     p->right = readTree();
