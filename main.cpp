@@ -58,7 +58,12 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(inputFilename && freopen(inputFilename, "rb", stdin) == NULL) {
+    if(inputFilename == NULL) {
+        fprintf(stderr, "error: you must specify FILE\n");
+        exit(EXIT_FAIL_OP);
+    }
+
+    if(freopen(inputFilename, "rb", stdin) == NULL) {
         perror(progname);
         exit(EXIT_FAIL_IO);
     }
@@ -98,7 +103,7 @@ void outputHelp()
     puts("-h\tshow this help message");
     puts("-d\tdecompress FILE, by default, compress");
     puts("-o FILE\tspecify output file, by default, output to stdout");
-    puts("FILE\tspecify input file, by default, read from stdin");
+    puts("FILE\tspecify input file");
 }
 
 void countBytes(Size *cnt);
